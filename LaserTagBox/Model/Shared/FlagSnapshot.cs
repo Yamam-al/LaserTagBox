@@ -3,7 +3,7 @@ using Mars.Interfaces.Environments;
 
 namespace LaserTagBox.Model.Shared;
 
-public struct FlagSnapshot
+public record struct FlagSnapshot
 {
     #region Properties
     /// <summary>

@@ -1,4 +1,7 @@
+using System;
 using System.Linq;
+using LaserTagBox.Model.Items;
+using LaserTagBox.Model.Shared;
 using Mars.Common.Core.Random;
 using Mars.Interfaces.Environments;
 
@@ -8,6 +11,9 @@ public class YourPlayerMindPleaseRename : AbstractPlayerMind
 {
     private PlayerMindLayer _mindLayer;
     private Position _goal;
+    private static bool _flagCarriedByFriend = false;
+    private static Guid _friendID;
+    private static Position _friendPosition;
 
     public override void Init(PlayerMindLayer mindLayer)
     {
@@ -16,27 +22,72 @@ public class YourPlayerMindPleaseRename : AbstractPlayerMind
 
     public override void Tick()
     {
-        if (Body.ActionPoints < 10)
-        {
-            return;  //TODO execution order fix
-        }
+        
+        
+        //Regel 1: Angriff, wenn Gegner Sichtbar
         var enemies = Body.ExploreEnemies1();
         if (enemies.Any())
         {
-            _goal = enemies.First().Position.Copy();
+            //_goal = enemies.First().Position.Copy();
             if (Body.RemainingShots == 0) Body.Reload3();
             Body.Tag5(enemies.First().Position);
         }
+        //Fall 1: Kein Gegner im Sicht Body.ActionPoints = 9
+        //Fall 2: Gegner getaggt, aber nicht reloaded Body.ActionPoints = 4
+        //Fall 3: Gegner getaggt und reloaded Body.ActionPoints == 1
             
+        //Regel 2: wenn genug Actionpoints und sichtbar Gegnerflagge holen
+        if (Body.RemainingShots > 1)
+        {
+            var flags = Body.ExploreFlags2();
+            var enemyFlag = flags.FirstOrDefault(f => f.Team != Body.Color && !f.PickedUp);
+            if (!enemyFlag.Equals(default(FlagSnapshot)))
+            {
+                _goal = enemyFlag.Position.Copy();
+            }
+            // Fall 1 = 7 ActionPoints, Fall 2 = 2 ActionPoints, Fall 3 = 1 Actionpoints
+            
+            //Regel 3: Wenn eigene Falgge gestohlen, dann Rückeroberung (außer Player trägt selber eine Flagge)
+            var ownfFlag = flags.FirstOrDefault(f => f.Team == Body.Color && f.PickedUp);
+            if (!ownfFlag.Equals(default(FlagSnapshot)) && !Body.CarryingFlag)
+            {
+                _goal = ownfFlag.Position.Copy();
+            }
+            
+        }
+        
+        //Regel 4: Flagge zurückbringen, wenn man sie trägt
+        if (Body.CarryingFlag)
+        {
+            var flagStand = Body.ExploreOwnFlagStand();
+            if (flagStand != null)
+            {
+                _goal = flagStand;
+            }
+        }
+        
+        //Regel 5: Wenn freund Flagge trägt, dann beschützen
+        if (_flagCarriedByFriend &&  _friendID != ID) _goal = _friendPosition;  //TODO irgendwie funktioniert das nicht
+        
+        //Regel 6: Wenn noch kein Ziel gesetzt ist, gehe richtung Gegnerflagge
         if (_goal == null || Body.GetDistance(_goal) == 1)
         {
-            var newX = RandomHelper.Random.Next(_mindLayer.Width);
-            var newY = RandomHelper.Random.Next(_mindLayer.Height);
-            _goal = Position.CreatePosition(newX, newY);
+            var enemyFlagStand = Body.ExploreEnemyFlagStands1().First();
+            _goal = enemyFlagStand;
+        }
+
+        
+        _flagCarriedByFriend = false; //reset
+        if (Body.CarryingFlag)
+        {
+            _flagCarriedByFriend = true;
+            _friendID = ID;
+            _friendPosition = Body.Position;
         }
 
         var moved = Body.GoTo(_goal);
         if (!moved) _goal = null;
+        
 
     }
 }
