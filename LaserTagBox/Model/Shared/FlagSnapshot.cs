@@ -3,7 +3,7 @@ using Mars.Interfaces.Environments;
 
 namespace LaserTagBox.Model.Shared;
 
-public record struct FlagSnapshot
+public struct FlagSnapshot : IEquatable<FlagSnapshot>
 {
     #region Properties
     /// <summary>
@@ -37,4 +37,19 @@ public record struct FlagSnapshot
         PickedUp = pickedUp;
     }
     #endregion
+
+    public bool Equals(FlagSnapshot other)
+    {
+        return Id.Equals(other.Id) && Team == other.Team;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is FlagSnapshot other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Id, (int)Team);
+    }
 }
