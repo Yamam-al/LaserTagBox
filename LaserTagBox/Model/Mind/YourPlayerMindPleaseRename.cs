@@ -71,11 +71,9 @@ public class YourPlayerMindPleaseRename : AbstractPlayerMind
                 _goal = flagStand;
             }
         }
+        
 
-        //Regel 5: Wenn freund Flagge trägt, dann beschützen
-        //if (_flagCarriedByFriend &&  _friendID != ID) _goal = _friendPosition;  //TODO irgendwie funktioniert das nicht
-
-        //Regel 6: Wenn noch kein Ziel gesetzt ist, gehe Richtung Gegnerflagge
+        //Regel 5: Wenn noch kein Ziel gesetzt ist, gehe Richtung Gegnerflagge
         if (_goal == null || Body.GetDistance(_goal) == 1)
         {
             var enemyFlagStand = Body.ExploreEnemyFlagStands1();
@@ -83,14 +81,7 @@ public class YourPlayerMindPleaseRename : AbstractPlayerMind
         }
 
 
-        // _flagCarriedByFriend = false; //reset
-        //if (Body.CarryingFlag)
-        // {
-        //     _flagCarriedByFriend = true;
-        //     _friendID = ID;
-        //     _friendPosition = Body.Position;
-        // }
-
+  
         _goal ??= Body.Position;
         var moved = Body.GoTo(_goal);
         if (!moved) _goal = null;

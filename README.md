@@ -1,4 +1,48 @@
-# LaserTag: A Multi-Agent Simulation Game
+# Rule-Based Agent - Capture the Flag (LaserTag) / Yamam & Natalie
+
+This agent is a simple rule-based player for the *Capture the Flag* mode. It follows a fixed set of prioritized behavioral rules to interact with its environment effectively.
+
+## Rule Set
+
+### Rule 1 - Attack if enemies are visible
+
+If one or more enemies are visible (`ExploreEnemies1()`):
+
+- The agent prioritizes combat over movement.
+- If out of ammo, it reloads (`Reload3()`), otherwise it tags the first visible enemy (`Tag5()`).
+
+### Rule 2 - Capture enemy flag
+
+If the agent has more than 1 remaining shot:
+
+- It scans for visible flags using `ExploreFlags2()`.
+- If the enemy flag is visible, the agent sets it as its goal and moves toward it.
+
+### Rule 3 - Recover own flag
+
+If the agent's own team flag has been picked up by the enemy, and the agent is **not carrying a flag**:
+
+- The agent sets the flag’s last known position as its new goal and attempts to retrieve it.
+
+### Rule 4 - Return carried flag
+
+If the agent is carrying any flag:
+
+- It searches for its own base (`ExploreOwnFlagStand()`) and moves toward it to score.
+
+### Rule 5 - Explore the enemy side
+
+If no goal is currently set or the goal has been reached:
+
+- The agent explores the enemy's flag stand positions using `ExploreEnemyFlagStands1()` and moves toward the first one found.
+
+## Fallback & Failsafes
+
+- If no valid goal could be determined, the agent defaults to staying in its current position.
+- If movement toward the goal fails (`GoTo()` returns false), the goal is reset to allow for re-evaluation in the next tick.
+
+## LaserTag: A Multi-Agent Simulation Game
+
 **Version 1.0.0** – *Released: May 27, 2025*
 
 
