@@ -1,4 +1,66 @@
-# Rule-Based Agent - Capture the Flag (LaserTag) / Yamam & Natalie
+# SupermanMind – Q-Learning-Agent für LaserTagBox
+
+## Überblick
+
+**SupermanMind** ist ein eigenständig entwickelter KI-Agent für das MARS-basierte LaserTagBox-Projekt.  
+Er verwendet **Q-Learning**, um eigenständig Strategien für das Flag-Capture-Spiel zu erlernen und sein Verhalten adaptiv zu verbessern.
+
+---
+
+## State-Repräsentation (Diskretisierung/Binning)
+
+Der Agent arbeitet mit einem **diskretisierten State-Space**, um die Lernzeit und den Speicherbedarf zu optimieren.  
+Folgende Eigenschaften werden beobachtet und in Bins zusammengefasst:
+
+- **ActionPoints** (0–2, 3–6, >6)
+- **Energy** (<40, >=40)
+- **RemainingShots** (0, 1–3, >=4)
+- **CarryingFlag** (ja/nein)
+- **Distance to Friend/Enemy/Hill/Ditch** (nah ≤5, mittel ≤15, weit >15)
+- **Distance to Own Flagstand** (nah ≤10, mittel ≤20, weit >20)
+- **HasMoved** (ja/nein)
+
+Dadurch ergibt sich eine deutlich kleinere, besser handhabbare Q-Table.
+
+---
+
+## Action-Space
+
+Der Agent kann folgende Aktionen ausführen:
+
+- **Stance ändern:** Standing, Kneeling, Lying
+- **Bewegungen:** Zu eigenem/feindlichem Flaggenstand, eigener/feindlicher Flagge, zu Freunden, Feinden, Hügeln, Gräben
+- **Taggen:** Gegner, Barrel
+- **Reload**
+- **Erkunden:** Barrels
+
+---
+
+## Reward-System
+
+Das Belohnungssystem fördert zielorientiertes und taktisches Verhalten:
+
+- **Flagge erobern:** +50 Punkte
+- **Gegner taggen:** +10 Punkte
+- **Barrel taggen:** +5 Punkte
+- **Getaggt werden:** –15 Punkte
+- **Unnötiges Nachladen:** –2 Punkte
+- **Bewegung/Aktion:** +4 Punkte
+
+---
+
+## Q-Table-Management & Parallelität
+
+- Die Q-Table wird als JSON-Datei gespeichert (`SupermanMind_qtable.json`).
+- **Dateizugriffe sind durch einen statischen Lock geschützt**, damit mehrere Agenten gleichzeitig sicher speichern und laden können (keine File-Locks/Crashes).
+
+---
+
+________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+________________________________________________________________________________________________________________________________________________________________________________________________________________
+________________________________________________________________________________________________________________________________________________________________________________________________________________
+## Rule-Based Agent - Capture the Flag (LaserTag) / Yamam & Natalie
 
 This agent is a simple rule-based player for the *Capture the Flag* mode. It follows a fixed set of prioritized behavioral rules to interact with its environment effectively.
 
@@ -45,7 +107,6 @@ If no goal is currently set or the goal has been reached:
 
 **Version 1.0.0** – *Released: May 27, 2025*
 
-
 LaserTag is an agent-based simulation game designed for developers to implement and test agent behaviors and let agent teams with different strategies compete against each other. The game runs on the multi-agent simulation framework [MARS (Multi-Agent Research and Simulation)](https://mars-group-haw.github.io/index.html).
 
 For project setup, game rules, agent interfaces, and more information on everything described in this README, see the PDF documentation in the directory `Documentation/`.
@@ -72,8 +133,6 @@ To visualize the results of a simulation, prebuilt visualization tools are provi
 
 The visualization reads game data produced during a simulation and displays it in a graphical interface.
 
-
-
 ### Note
 
 The visualization was created using the [Godot Engine](https://godotengine.org/). No installation is required – the exported version runs as a standalone application.
@@ -88,7 +147,9 @@ After extracting the archive, run the following command in Terminal, replacing t
 ```bash
 xattr -d com.apple.quarantine /path/to/model-mars-laser-tag-game/Visualization/visualization_macOS.app
 ```
+
 For example, if your project is in your home directory:
+
 ```bash
 xattr -d com.apple.quarantine ~/model-mars-laser-tag-game/Visualization/visualization_macOS.app
 ```
@@ -97,9 +158,11 @@ After that, the app should start normally.
 Alternatively, you can right-click the app and choose “Open”, then confirm the dialog once.
 
 ### Disabling Visualization
+
 If you do not want to use the visualization, you can disable it in the simulation configuration.
 
 Open your JSON configuration file `config.json` Set the "Visualization" mapping parameter to false like this:
+
 ```json
 ...
 "layers": [
