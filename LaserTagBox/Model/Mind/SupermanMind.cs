@@ -241,16 +241,60 @@ namespace LaserTagBox.Model.Mind
         }
 
 
-        // Reward function (anpassen je nach gewünschtem Verhalten)
+              // Reward function (anpassen je nach gewünschtem Verhalten)
+        private double _lastDistToEnemyFlag = -1; // Member-Variable für Fortschritt
+        private double _lastDistToOwnFlagStand = -1; // Member-Variable
+
+
         private double GetReward(int action)
         {
-            if (HasCapturedFlagThisTick) return 50; // big reward
-            if (action == 12 && Enemies.Any(e => e.Position.Equals(Body.Position))) return 10; // tagged enemy
-            if (action == 13) return 5; // tagged barrel
-            if (Body.WasTaggedLastTick) return -15; // got tagged
-            if (action == 14 && _remainingShotsBeforeReload != 0) return -2; // unnecessary reload
-            if (HasMoved) return 4; // exploring reward
-            return 0;
+            double reward = 0;
+            // Flagge erobern
+            if (HasCapturedFlagThisTick) reward += 50;
+
+            // Belohnung fürs Tragen Richtung Heimat
+            if (Body.CarryingFlag)
+            {
+                double currDistToOwnFlag = Body.GetDistance(Body.ExploreOwnFlagStand());
+                if (_lastDistToOwnFlagStand > 0 && currDistToOwnFlag < _lastDistToOwnFlagStand)
+                    reward += 10; // Deutlich höherer Reward pro Fortschritt!
+                _lastDistToOwnFlagStand = currDistToOwnFlag;
+            }
+            else
+            {
+                _lastDistToOwnFlagStand = -1; // zurücksetzen, wenn Flagge abgegeben
+                _lastDistToEnemyFlag = -1;
+            }
+            if (action == 12 && Enemies.Any(e => e.Position.Equals(Body.Position))) reward += 10;
+            if (action == 13) reward += 5;
+            if (Body.WasTaggedLastTick) reward -= 15;
+
+            // 2. Kleine Rewards für sinnvolles Verhalten
+            if (HasMoved) reward += 2; // statt 4, um Bewegung zu fördern, aber nicht zu stark
+
+            // 3. Fortschritt zur Gegnerflagge (nur wenn nicht already at min dist)
+            double currentDistToEnemyFlag = Body.GetDistance(GetEnemyFlagPosition());
+            if (_lastDistToEnemyFlag > 0 && currentDistToEnemyFlag < _lastDistToEnemyFlag)
+                reward += 1; // für jeden Schritt näher
+            _lastDistToEnemyFlag = currentDistToEnemyFlag;
+
+            // 4. Tag-Action nutzen, wenn Gegner in Nähe
+            if (action == 12 && Enemies.Any(e => Body.GetDistance(e.Position) <= 5))
+                reward += 3;
+
+            // 5. Strafen für passives Verhalten
+            if (!HasMoved) reward -= 2;
+            if (Body.Position != null && Body.Position.Equals(Body.ExploreOwnFlagStand()))
+                reward -= 2; // Camping-Malus
+
+            // 6. Unnötiges Reload
+            if (action == 14 && _remainingShotsBeforeReload != 0)
+                reward -= 2;
+
+            // 7. Kleine Strafe, wenn man die eigene Flagge "verlässt", obwohl Gegner in der Nähe sind (optional)
+            // (Kann Team-Play oder Defensivverhalten fördern, wenn du willst)
+
+            return reward;
         }
     }
 
@@ -377,19 +421,21 @@ namespace LaserTagBox.Model.Mind
             lock (FileLock)
             {
                 var json = JsonSerializer.Serialize(_qTable);
-                File.WriteAllText(FilePath, json);
+                var tempPath = FilePath + ".tmp";
+                File.WriteAllText(tempPath, json);
+                File.Replace(tempPath, FilePath, null); // atomic um Verlust bei Crash zu vermeiden
             }
         }
 
+        private static readonly Random _rng = new Random();
         public int GetBestAction(SupermanState state)
         {
             var idx = state.GetIndex();
             if (!_qTable.ContainsKey(idx))
                 _qTable[idx] = new double[ActionCount];
-            // Epsilon-greedy for exploration
             double epsilon = 0.1;
-            if (new Random().NextDouble() < epsilon)
-                return new Random().Next(ActionCount);
+            if (_rng.NextDouble() < epsilon)
+                return _rng.Next(ActionCount);
             double[] qVals = _qTable[idx];
             return Array.IndexOf(qVals, qVals.Max());
         }

@@ -29,7 +29,7 @@ internal static class Program
 
         // USER: Add agents here
         description.AddAgent<SupermanMind, PlayerMindLayer>();
-        description.AddAgent<Example1, PlayerMindLayer>();
+        description.AddAgent<YourPlayerMindPleaseRename, PlayerMindLayer>();
 
         // USER: Specify JSON configuration file here
         var file = File.ReadAllText("config.json");
