@@ -1,18 +1,28 @@
 ﻿import subprocess
 
-# Pfad zur ausführbaren Datei
-exe_path = r"C:/Users/alsho/RiderProjects/LaserTagBox/LaserTagBox/bin/Debug/net8.0/LaserTagBox.exe"
-
-# Anzahl der Durchläufe
-num_runs = 1000
+exe_path = r"C:/projects/LaserTagBox/LaserTagBox/bin/Debug/net8.0/LaserTagBox.exe"
+num_runs = 500
+timeout_seconds = 60  # 1 Minuten Timeout
 
 for i in range(num_runs):
     print(f"Run {i+1}/{num_runs}")
-    result = subprocess.Popen(exe_path)
-    result.wait()
-    # Ausgabe anzeigen oder loggen
-    print("Exit code:", result.returncode)
-    if result.stdout:
-        print("Output:", result.stdout.strip())
-    if result.stderr:
-        print("Error:", result.stderr.strip())
+    try:
+        # stdout/stderr werden auf PIPE gesetzt, damit sie nach Timeout noch gelesen werden können
+        result = subprocess.Popen(exe_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            result.wait(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            print("Timeout reached, killing process.")
+            result.kill()
+            print(f"Run {i+1} skipped due to timeout.")
+            continue
+
+        # Nach Beenden: Ausgaben lesen
+        stdout, stderr = result.communicate(timeout=5)
+        print("Exit code:", result.returncode)
+        if stdout:
+            print("Output:", stdout.decode('utf-8').strip())
+        if stderr:
+            print("Error:", stderr.decode('utf-8').strip())
+    except Exception as e:
+        print(f"Exception in run {i+1}: {e}")

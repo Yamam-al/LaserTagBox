@@ -29,7 +29,7 @@ internal static class Program
 
         // USER: Add agents here
         description.AddAgent<SupermanMind, PlayerMindLayer>();
-        description.AddAgent<YourPlayerMindPleaseRename, PlayerMindLayer>();
+        description.AddAgent<SupermanRB, PlayerMindLayer>();
 
         // USER: Specify JSON configuration file here
         var file = File.ReadAllText("config.json");
@@ -39,6 +39,7 @@ internal static class Program
         {
             var starter = SimulationStarter.Start(description, config);
             var handle = starter.Run();
+            QTableManagerSuperman.Instance.SaveQTable();
             Console.WriteLine("Successfully executed iterations: " + handle.Iterations);
             starter.Dispose();
         }

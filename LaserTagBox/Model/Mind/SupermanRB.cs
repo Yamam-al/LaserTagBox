@@ -4,7 +4,7 @@ using Mars.Interfaces.Environments;
 
 namespace LaserTagBox.Model.Mind;
 
-public class YourPlayerMindPleaseRename : AbstractPlayerMind
+public class SupermanRB : AbstractPlayerMind
 {
     private PlayerMindLayer _mindLayer;
 

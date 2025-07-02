@@ -10,7 +10,7 @@ namespace LaserTagBox.Model.Mind
 {
     public class SupermanMind : AbstractPlayerMind
     {
-        private QTableManagerSuperman _qManager;
+        //private QTableManagerSuperman _qManager;
         private SupermanState _state;
         internal bool HasMoved;
 
@@ -28,8 +28,7 @@ namespace LaserTagBox.Model.Mind
 
         public override void Init(PlayerMindLayer mindLayer)
         {
-            _qManager = new QTableManagerSuperman();
-            _qManager.LoadQTable();
+            QTableManagerSuperman.Instance.LoadQTable();
             HasCapturedFlagThisTick = false;
         }
 
@@ -41,18 +40,18 @@ namespace LaserTagBox.Model.Mind
 
             while (Body.ActionPoints > 0)
             {
-                int actionIdx = _qManager.GetBestAction(_state);
+                int actionIdx = QTableManagerSuperman.Instance.GetBestAction(_state);
                 DoAction(actionIdx);
 
                 // Q-Learning Update nach jeder Action
                 double reward = GetReward(actionIdx);
-                _qManager.UpdateQ(_state, actionIdx, reward);
+                QTableManagerSuperman.Instance.UpdateQ(_state, actionIdx, reward);
 
                 UpdateSenses();
                 _state.Update();
             }
 
-            _qManager.SaveQTable();
+            //_qManager.SaveQTable();
         }
 
         private void UpdateSenses()
@@ -397,6 +396,10 @@ namespace LaserTagBox.Model.Mind
     // --- QTableManager for SupermanMind ---
     public class QTableManagerSuperman
     {
+        private static QTableManagerSuperman _instance;
+        public static QTableManagerSuperman Instance => _instance ??= new QTableManagerSuperman();
+
+        
         private static readonly object FileLock = new object();
         private Dictionary<int, double[]> _qTable = new();
         private string FilePath = Path.Combine(Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.FullName, 
