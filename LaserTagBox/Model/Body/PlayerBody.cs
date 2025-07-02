@@ -22,10 +22,7 @@ public class PlayerBody : MovingAgent, IPlayerBody
     /// </summary>
     public string TeamName { get; set; }
         
-    /// <summary>
-    ///     Represents the agent's vital state.
-    /// </summary>
-    public bool Alive { get; private set; } = true;
+    
         
     /// <summary>
     ///     Points that can be spent on actions per tick.
@@ -41,7 +38,7 @@ public class PlayerBody : MovingAgent, IPlayerBody
     ///     The agent's point count (for tagging enemy agents, etc.).
     /// </summary>
     public int GamePoints { get; private set; }
-    
+
     /// <summary>
     ///    Determines whether the agent is carrying the flag.
     /// </summary>
@@ -57,6 +54,17 @@ public class PlayerBody : MovingAgent, IPlayerBody
     ///     The remaining number of shots (tagging opportunities) of the agent.
     /// </summary>
     public int RemainingShots { get; private set; } = 5;
+    
+    /// <summary>
+    ///     Represents the agent's vital state.
+    /// </summary>
+    public bool Alive { get; set; } = true;
+    
+    /// <summary>
+    ///    The ID of the agent that tagged this agent.
+    /// </summary>
+    public Guid TaggerID { get; set; } = Guid.Empty;
+    
     #endregion
 
     #region Fields
@@ -74,6 +82,12 @@ public class PlayerBody : MovingAgent, IPlayerBody
     /// Stores the number of ticks since the agent has died.
     /// </summary>
     private int _deadTicks = 0;
+    
+    /// <summary>
+    /// lock object for pathfinding to prevent concurrent access issues
+    /// </summary>
+    private readonly object _pathfindingLock = new();
+    
     #endregion
 
     #region Tick
@@ -91,18 +105,14 @@ public class PlayerBody : MovingAgent, IPlayerBody
             {
                 return;
             }
-            else
+            _deadTicks++;
+            if (_deadTicks >= 60)
             {
-                _deadTicks++;
-                if (_deadTicks >= 60)
-                {
-                    Respawn();
-                    _deadTicks = 0;
-                }
-                return;
+                Respawn();
+                _deadTicks = 0;
             }
+            return;
         }
-        
         if (_currentTick == Battleground.GetCurrentTick())
             throw new InvalidOperationException("Don't call the Tick method, it's done by the system.");
         _currentTick = Battleground.GetCurrentTick();
@@ -170,7 +180,21 @@ public class PlayerBody : MovingAgent, IPlayerBody
             .Select(e => e.Position)
             .ToList();
     }
-    
+
+    /// <summary>
+    ///    Moves the agent to the given position.
+    /// </summary>
+    /// <param name="goal"></param>
+    /// <returns></returns>
+    public bool GoTo(Position goal)
+    {
+        if (!Alive) return false;
+        lock (_pathfindingLock)
+        {
+            return TryMoveTo(goal);
+        }
+    }
+
     /// <summary>
     ///    Explores the flags.
     /// </summary>
@@ -191,7 +215,7 @@ public class PlayerBody : MovingAgent, IPlayerBody
     public List<FriendSnapshot> ExploreTeam()
     {
         return new List<FriendSnapshot>(Battleground.FighterEnv
-            .Entities.Where(body => body.Color == Color && body != this).Select(b =>
+            .Entities.Where(body => body.Color == Color && body != this && body.Alive).Select(b =>
                 new FriendSnapshot(b.ID, b.MemberId, b.Color, b.Stance, b.Position, b.Energy, b.VisualRange, b.VisibilityRange))
             .ToList());
     }
@@ -206,7 +230,7 @@ public class PlayerBody : MovingAgent, IPlayerBody
         ActionPoints -= 1;
         return Battleground.FighterEnv
             .Explore(Position, VisualRange, -1,
-                player => IsEnemy(player) && HasBeeline(player) && IsVisible(player))
+                player => IsEnemy(player) && player.Alive && HasBeeline(player) && IsVisible(player))
             .Select(player => new EnemySnapshot(player.ID, player.MemberId, player.Color, player.Stance, player.Position))
             .ToList();
     }
@@ -261,18 +285,18 @@ public class PlayerBody : MovingAgent, IPlayerBody
             barrel.Tagged();
             return true;
         }
-        var enemy = Battleground.GetAgentOn(aimedPosition);
-        if (enemy == null) return false;
-        if (enemy.Color == Color) return false;
+        var target = Battleground.GetAgentOn(aimedPosition);
+        if (target == null) return false;
+        if (Battleground.Mode == GameMode.TeamDeathmatch && target.Color == Color) return false; // no friendly fire in team deathmatch
 
         var fieldType = Battleground.GetIntValue(aimedPosition);
-        var enemySpot = fieldType switch
+        var targetSpot = fieldType switch
         {
             3 => 0, // in ditch
             2 => 2, // on hill
             _ => 1  // on normal ground
         };
-        var enemyStance = enemy.Stance switch
+        var targetStance = target.Stance switch
         {
             Stance.Standing => 2,
             Stance.Kneeling => 1,
@@ -288,11 +312,11 @@ public class PlayerBody : MovingAgent, IPlayerBody
             _ => throw new ArgumentOutOfRangeException()
         };
 
-        var success = RandomHelper.Random.Next(10) + enemyStance + enemySpot > stanceValue;
+        var success = RandomHelper.Random.Next(10) + targetStance + targetSpot > stanceValue;
         if (success)
         {
             GamePoints += 10;
-            if (enemy.Tagged()) GamePoints += 10; // bonus points
+            if (target.Tagged(ID)) GamePoints += 10; // bonus points
             return true;
         }
 
@@ -337,6 +361,7 @@ public class PlayerBody : MovingAgent, IPlayerBody
     /// <returns>boolean</returns>
     private bool HasBeeline(IPositionable other) =>
         Battleground.HasBeeline(Position.X, Position.Y, other.Position.X, other.Position.Y);
+    
         
     /// <summary>
     ///     Determines whether there exists a direct line of sight between the caller and the given position
@@ -380,8 +405,9 @@ public class PlayerBody : MovingAgent, IPlayerBody
     ///     Handles a successful tag of the agent.
     /// </summary>
     /// <returns>true if the agent's energy is negative, otherwise false</returns>
-    private bool Tagged()
+    private bool Tagged(Guid taggerID)
     {
+        TaggerID = taggerID;
         _tickWhenLastTagged = _currentTick;
         Energy -= 10;
         if (Energy >= 0) return false;
@@ -393,7 +419,7 @@ public class PlayerBody : MovingAgent, IPlayerBody
     ///    Handles the agent's explosion damage.
     /// </summary>
     /// <param name="damage"></param>
-    public void TakeExplosionDamage(int damage)
+    public void TakeExplosionDamage(int damage, Guid BarrelID)
     {
         _tickWhenLastTagged = _currentTick;
         Energy -= damage;
@@ -410,17 +436,21 @@ public class PlayerBody : MovingAgent, IPlayerBody
     {
         if (!Alive) return;
         Alive = false;
-        Battleground.FighterEnv.Remove(this);
-        // Do not remove agent from tick cycle for evaluation purposes
-            
-        ActionPoints = 0;
-        if (!CarryingFlag) return;
-        var flag = Battleground.Items.Values.Where(f => f is Flag).Where(f => f.PickedUp).FirstOrDefault(f => f.Owner.ID.Equals(ID));
-        if (flag != null)
+        if (CarryingFlag) // If the agent was carrying a flag, it is dropped.
         {
-            flag.Drop();
-            CarryingFlag = false;
+            var flag = Battleground.Items.Values.Where(f => f is Flag).Where(f => f.PickedUp).FirstOrDefault(f => f.Owner.ID.Equals(ID));
+            if (flag != null)
+            {
+                flag.Drop();
+                CarryingFlag = false;
+            }
         }
+        lock (_pathfindingLock)
+        {
+            MoveMe(XSpawn, YSpawn);
+        }
+        Battleground.FighterEnv.Remove(this);
+        ActionPoints = 0;
     }
 
     /// <summary>
@@ -450,17 +480,16 @@ public class PlayerBody : MovingAgent, IPlayerBody
     /// </summary>
     private void Respawn()
     {
-        var flagStand = Battleground.SpotEnv.Entities.Where(e => 
-            e.GetType() == typeof(FlagStand)).FirstOrDefault(e => ((FlagStand)e).Color == Color);
-        if (flagStand != null)
+        lock (_pathfindingLock)
         {
-            Position = Position.CreatePosition(flagStand.Position.X, flagStand.Position.Y);
             Alive = true;
             ActionPoints = 10;
             Energy = 100;
             RemainingShots = 5;
+            Battleground.FighterEnv.Insert(this);
+            ResetPathfinding();
+            MoveMe(XSpawn, YSpawn);
         }
-        Battleground.FighterEnv.Insert(this);
     }
     #endregion
 }
